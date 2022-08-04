@@ -19,11 +19,9 @@ package com.naivor.android.kotlinex
 import android.app.Activity
 import android.content.Context
 import android.graphics.Outline
-import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LevelListDrawable
-import android.os.Build
 import android.text.Html
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -31,12 +29,15 @@ import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.text.style.ImageSpan
 import android.util.Log
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.EditText
 import android.widget.TextView
+import androidx.appcompat.widget.AppCompatTextView
 import androidx.appcompat.widget.SearchView
+import androidx.appcompat.widget.Toolbar
 import androidx.core.text.HtmlCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.GridLayoutManager
@@ -82,66 +83,30 @@ fun View.inflater(): LayoutInflater {
  * view 的圆角剪裁
  */
 fun View.clipToOutlineCorners(
-    corners: Float = 0f,
-    leftTop: Float = 0f,
-    rightTop: Float = 0f,
-    leftBottom: Float = 0f,
-    rightBottom: Float = 0f
+    corners: Int? = null
 ) {
-    if (corners != 0f || leftTop != 0f || rightTop != 0f || leftBottom != 0f || rightBottom != 0f) {
-        clipToOutline = true
-        outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View?, outline: Outline?) {
-                view?.run {
-                    val path = Path()
-                    val rect = Rect()
-                    getDrawingRect(rect)
 
-                    var leftTopCorner = leftTop
-                    var rightTopCorner = rightTop
-                    var leftBottomCorner = leftBottom
-                    var rightBottomCorner = rightBottom
-                    var allCorners = corners
-                    if (allCorners == 0f) {
-                        val mWidth = min(width, height)
-                        allCorners = (mWidth / 10).toFloat()
-                    }
-                    if (allCorners != 0f) {
-                        val useCorners =
-                            leftTopCorner == 0f && rightTopCorner == 0f && leftBottomCorner == 0f && rightBottomCorner == 0f
-                        if (leftTopCorner == 0f && useCorners) leftTopCorner = allCorners
-                        if (rightTopCorner == 0f && useCorners) rightTopCorner = allCorners
-                        if (leftBottomCorner == 0f && useCorners) leftBottomCorner = allCorners
-                        if (rightBottomCorner == 0f && useCorners) rightBottomCorner = allCorners
-                    }
+    outlineProvider = object : ViewOutlineProvider() {
+        override fun getOutline(view: View, outline: Outline) {
+            view.run {
+                val rect = Rect()
 
-                    path.addRoundRect(
-                        rect.left.toFloat(),
-                        rect.top.toFloat(),
-                        rect.right.toFloat(),
-                        rect.bottom.toFloat(),
-                        floatArrayOf(
-                            leftTopCorner,
-                            leftTopCorner,
-                            rightTopCorner,
-                            rightTopCorner,
-                            rightBottomCorner,
-                            rightBottomCorner,
-                            leftBottomCorner,
-                            leftBottomCorner
-                        ),
-                        Path.Direction.CW
-                    )
+                getDrawingRect(rect)
 
-                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
-                        outline!!.setConvexPath(path)
-                    } else {
-                        outline!!.setPath(path)
-                    }
-                }
+                val minSize = min(width, height) / 2
+
+                val realCorners = if (corners == null) {
+                    minSize / 2
+                } else if (corners > minSize) {
+                    minSize
+                } else corners
+
+                outline.setRoundRect(rect, realCorners.toFloat())
             }
         }
     }
+
+    clipToOutline = true
 }
 
 
@@ -230,8 +195,6 @@ fun TextView.loadHtml(
 }
 
 
-
-
 /**
  * 圆角网格布局
  */
@@ -239,7 +202,12 @@ fun RecyclerView.simpleDecoration(
     left: Int = 0, top: Int = 0, right: Int = 0, bottom: Int = 0,
 ) {
     this.addItemDecoration(object : RecyclerView.ItemDecoration() {
-        override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
+        override fun getItemOffsets(
+            outRect: Rect,
+            view: View,
+            parent: RecyclerView,
+            state: RecyclerView.State
+        ) {
             super.getItemOffsets(outRect, view, parent, state)
 
             val columns = when (val manager = parent.layoutManager) {
@@ -287,14 +255,23 @@ fun SearchView.editTextSize(textSize: Int): EditText {
 /**
  * AppBarLayout收缩才显示Title，展开才能下拉刷新
  */
-fun AppBarLayout.expandHideTitle(titleView: View?, refreshLayout: SwipeRefreshLayout?=null) {
+fun AppBarLayout.expandHideTitle(
+    toolbar: Toolbar? = null,
+    titleView: View? = null,
+    refreshLayout: SwipeRefreshLayout? = null
+) {
+    val titleText = toolbar?.title ?: ""
     addOnOffsetChangedListener(AppBarLayout.OnOffsetChangedListener { appBarLayout, i ->
+        val expand = abs(i) < totalScrollRange
         appBarLayout?.run {
+            toolbar?.run {
+                title = if (expand) "" else titleText
+            }
             titleView?.run {
-                visibility = if (abs(i) >= totalScrollRange) View.VISIBLE else View.INVISIBLE
+                visibility = if (!expand) View.VISIBLE else View.INVISIBLE
             }
             refreshLayout?.run {
-                isEnabled = abs(i) < totalScrollRange
+                isEnabled = expand
             }
         }
     })
